@@ -1,78 +1,112 @@
+import os
+
 from flask import Flask, render_template, request, redirect, url_for, session, flash
-from CsecurityMES.modelli import db, User, Role
+
+from modelli import Persona, Ruolo, db
 
 app = Flask(__name__)
-app.secret_key = 'chiave_segreta_provvisoria'
+app.secret_key = 'password'
 
-# Configurazione Database SQLite locale
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sifmes_sim.db'
+# Configurazione Database: usa DATABASE_URL se presente, altrimenti SQLite locale
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///gestione_accessi.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-# Popolamento iniziale del DB (eseguito solo la prima volta)
+
 @app.before_request
 def create_tables():
     db.create_all()
-    if not Role.query.first():
-        # Inseriamo i ruoli esattamente come da tua foto
+
+    if not Ruolo.query.first():
         ruoli_iniziali = [
-            Role(id=1, name="Instructor", description="System administrator. Permission to manage users and roles, generate disturbances and execute exercises..."),
-            Role(id=2, name="Production manager", description="Planning and preparation of orders. Permission to manage and launch orders..."),
-            Role(id=3, name="Maintenance responsible", description="Maintenance of stations and components. Permission to maintenance options."),
-            Role(id=4, name="Quality manager", description="System quality verification. Permission to energy management and statistical control processes."),
-            Role(id=5, name="Logistics", description="Warehouse management. Permission to stock management, warehouse management..."),
-            Role(id=6, name="Client", description="Place orders. Permission to create his orders and monitor them."),
-            Role(id=7, name="Operator", description="Interaction with stations. Permission to see alarms and system status."),
-            Role(id=8, name="Guest", description="Role used for visits.")
+            Ruolo(id_ruolo=1, descrizione="Instructor - system administrator"),
+            Ruolo(id_ruolo=2, descrizione="Production manager - planning and preparation of orders"),
+            Ruolo(id_ruolo=3, descrizione="Maintenance responsible - maintenance of stations and components"),
+            Ruolo(id_ruolo=4, descrizione="Quality manager - quality verification and statistical control"),
+            Ruolo(id_ruolo=5, descrizione="Logistics - warehouse and stock management"),
+            Ruolo(id_ruolo=6, descrizione="Client - order creation and monitoring"),
+            Ruolo(id_ruolo=7, descrizione="Operator - interaction with stations and alarms"),
+            Ruolo(id_ruolo=8, descrizione="Guest - role used for visits"),
         ]
         db.session.bulk_save_objects(ruoli_iniziali)
-        
-        # Un utente di test admin/admin
-        admin_user = User(username="admin", password="password", role_id=1)
+        db.session.commit()
+
+    if not Persona.query.filter_by(username='admin').first():
+        admin_user = Persona(nome='Admin', cognome='Sistema', username='admin', password='password')
+        first_role = Ruolo.query.filter_by(id_ruolo=1).first()
+        if first_role:
+            admin_user.ruoli.append(first_role)
         db.session.add(admin_user)
         db.session.commit()
 
-# --- ROTTE ---
+
+def require_login():
+    if 'persona_id' not in session:
+        return redirect(url_for('login'))
+    return None
+
+
+def get_logged_persona():
+    persona_id = session.get('persona_id')
+    if not persona_id:
+        return None
+    return db.session.get(Persona, persona_id)
+
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        
-        user = User.query.filter_by(username=username, password=password).first()
-        if user:
-            session['user_id'] = user.id
-            session['username'] = user.username
+
+        persona = Persona.query.filter_by(username=username, password=password).first()
+        if persona:
+            session['persona_id'] = persona.id_persona
+            session['username'] = persona.username
+            session['display_name'] = f'{persona.nome} {persona.cognome}'.strip()
             return redirect(url_for('dashboard'))
-        else:
-            flash('Credenziali non valide!', 'danger')
-            
+
+        flash('Credenziali non valide!', 'danger')
+
     return render_template('login.html')
+
 
 @app.route('/dashboard')
 def dashboard():
-    if 'user_id' not in session: return redirect(url_for('login'))
-    return render_template('dashboard.html')
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    persona = get_logged_persona()
+    return render_template('dashboard.html', persona=persona, ruoli=persona.ruoli if persona else [])
+
 
 @app.route('/user-management')
 def user_management():
-    if 'user_id' not in session: return redirect(url_for('login'))
-    # Per ora passiamo una lista vuota o finta, la collegheremo dopo al DB utenti
-    users = User.query.all()
-    return render_template('user_management.html', users=users)
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    persone = Persona.query.order_by(Persona.id_persona).all()
+    return render_template('user_management.html', persone=persone, users=persone)
+
 
 @app.route('/role-management')
 def role_management():
-    if 'user_id' not in session: return redirect(url_for('login'))
-    roles = Role.query.all()
-    return render_template('role_management.html', roles=roles)
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    ruoli = Ruolo.query.order_by(Ruolo.id_ruolo).all()
+    return render_template('role_management.html', roles=ruoli)
+
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)

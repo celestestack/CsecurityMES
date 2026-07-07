@@ -11,18 +11,22 @@
 <table class="smc-table">
     <thead>
         <tr>
-            <th>User ID</th>
+            <th>Persona ID</th>
+            <th>Nome</th>
+            <th>Cognome</th>
             <th>Username</th>
-            <th>Role Assigned</th>
+            <th>Ruoli assegnati</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
-        {% for user in users %}
+        {% for persona in persone %}
         <tr>
-            <td>{{ user.id }}</td>
-            <td>{{ user.username }}</td>
-            <td>{{ user.role.name if user.role else 'Nessuno' }}</td>
+            <td>{{ persona.id_persona }}</td>
+            <td>{{ persona.nome }}</td>
+            <td>{{ persona.cognome }}</td>
+            <td>{{ persona.username }}</td>
+            <td>{{ persona.ruoli | map(attribute='descrizione') | join(', ') if persona.ruoli else 'Nessuno' }}</td>
             <td><button class="edit-btn">✏️</button></td>
         </tr>
         {% endfor %}

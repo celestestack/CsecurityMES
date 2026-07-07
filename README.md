@@ -1,100 +1,99 @@
 # CsecurityMES
 
-Sistema di gestione della sicurezza e dei ruoli per ambienti Manufacturing Execution System (MES).
+Applicazione Flask per la gestione degli accessi, costruita sullo schema relazionale del dump MySQL `gestione_accessi`.
 
 ## Descrizione
 
-CsecurityMES è un'applicazione web Flask per la gestione centralizzata di utenti e ruoli in un sistema MES. L'applicazione fornisce:
+La webapp gestisce autenticazione, persone, ruoli e tabelle collegate allo schema presente nel progetto:
 
-- **Autenticazione**: Sistema di login sicuro con gestione delle sessioni
-- **Gestione Ruoli**: 8 ruoli predefiniti con permessi specifici (Instructor, Production Manager, Maintenance Responsible, Quality Manager, Logistics, Client, Operator, Guest)
-- **Gestione Utenti**: Interfaccia per la creazione e gestione degli utenti del sistema
-- **Dashboard**: Pagina principale con informazioni di sistema
-- **Database Integrato**: SQLite locale per lo sviluppo
+- `persone`
+- `ruoli`
+- `permessi`
+- `stazioni`
+- `persone_ruoli`
+- `ruolo_stazione_permesso`
 
 ## Stack Tecnologico
 
 - **Backend**: Python 3 + Flask
-- **Database**: SQLite (file locale `sifmes_sim.db`)
-- **Frontend**: HTML, CSS, Jinja2 templates
-- **ORM**: SQLAlchemy via Flask-SQLAlchemy
+- **ORM**: Flask-SQLAlchemy / SQLAlchemy
+- **Database**: SQLite locale di default, oppure database esterno tramite `DATABASE_URL`
+- **Frontend**: HTML, Jinja2, CSS
 
 ## Struttura del Progetto
 
 ```
 CsecurityMES/
-├── webapp.py                 # Applicazione principale Flask
-├── modelli.py               # Modelli database (User, Role)
-├── style.css                # Foglio di stile globale
-├── templates/               # Template HTML
-│   ├── login.html          # Pagina di login
-│   ├── dashboard.html      # Dashboard principale
-│   ├── user_management.html # Gestione utenti
-│   └── role_management.html # Gestione ruoli
+├── webapp.py
+├── modelli.py
+├── requirements.txt
+├── templates/
+│   ├── login.html
+│   ├── dashboard.html
+│   ├── user_management.html
+│   └── role_management.html
 └── README.md
 ```
 
-## Ruoli Disponibili
+## Schema Dati
 
-1. **Instructor** - Amministratore di sistema. Permessi per gestire utenti e ruoli, generare disturbi ed eseguire esercizi
-2. **Production Manager** - Pianificazione e preparazione ordini
-3. **Maintenance Responsible** - Manutenzione stazioni e componenti
-4. **Quality Manager** - Verifica qualità e processi di controllo statistico
-5. **Logistics** - Gestione magazzino
-6. **Client** - Creazione e monitoraggio ordini
-7. **Operator** - Interazione con stazioni e visualizzazione allarmi
-8. **Guest** - Ruolo per visite
+- `persone`: anagrafica utenti con `nome`, `cognome`, `username`, `password`
+- `ruoli`: descrizioni dei ruoli
+- `permessi`: catalogo permessi
+- `stazioni`: elenco stazioni
+- `persone_ruoli`: associazione molti-a-molti tra persone e ruoli
+- `ruolo_stazione_permesso`: associazione tra ruolo, stazione e permesso
 
 ## Installazione
 
 ### Prerequisiti
+
 - Python 3.7+
 - pip
 
 ### Setup
 
-1. Installare le dipendenze:
-```bash
-pip install flask flask-sqlalchemy
+1. Attiva il virtual environment:
+```powershell
+.\venv\Scripts\Activate.ps1
 ```
 
-2. Eseguire l'applicazione:
-```bash
+2. Installa i requisiti:
+```powershell
+pip install -r requirements.txt
+```
+
+3. Avvia l'applicazione:
+```powershell
 python webapp.py
 ```
 
-L'applicazione sarà disponibile su `http://localhost:5000`
+L'applicazione sarà disponibile su `http://localhost:5000`.
 
-## Credenziali di Default
+## Accesso di Default
 
 - **Username**: `admin`
 - **Password**: `password`
 
-⚠️ **Nota Importante**: Queste sono credenziali di default solo per lo sviluppo. Cambiarle in produzione!
+## Note Database
+
+- Se `DATABASE_URL` è impostata, l'app prova a usare quel database.
+- In assenza di `DATABASE_URL`, viene creato un file SQLite locale `gestione_accessi.db`.
+- Alla prima esecuzione vengono creati automaticamente le tabelle e un utente admin di test.
 
 ## Rotte Disponibili
 
 - `/` - Login
-- `/dashboard` - Dashboard principale (richiede autenticazione)
-- `/user-management` - Gestione utenti
+- `/dashboard` - Dashboard principale
+- `/user-management` - Gestione persone
 - `/role-management` - Gestione ruoli
 - `/logout` - Logout
 
-## Database
-
-Il database SQLite viene creato automaticamente alla prima esecuzione con i ruoli e l'utente admin precaricati.
-
-File database: `sifmes_sim.db` (creato localmente)
-
 ## Sicurezza
 
-⚠️ **IMPORTANTE**: Questo progetto è in fase di sviluppo. Per la produzione:
-- Implementare hashing delle password (es. Werkzeug)
-- Usare una chiave segreta sicura (non quella di default)
-- Implementare HTTPS
-- Usare un database robusto (PostgreSQL, MySQL)
-- Aggiungere validazione dei dati e protezione CSRF
+Per l'uso in produzione conviene:
 
-## Autore
-
-Progetto Galligani
+- usare password hashate
+- definire una `secret_key` sicura
+- usare HTTPS
+- validare input e proteggere i form con CSRF

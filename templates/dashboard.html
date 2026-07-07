@@ -15,7 +15,7 @@
             <a href="#">Supervision</a>
         </div>
         <div class="user-info">
-            <span>{{ session['username'] }} (Instructor)</span> | 
+            <span>{{ session.get('display_name', session.get('username', 'Utente')) }}</span> | 
             <a href="{{ url_for('logout') }}" style="color: #ff6b6b;">Logout</a>
         </div>
     </div>
@@ -23,8 +23,11 @@
     <div class="container">
         {% block content %}
         <div class="welcome-box">
-            <h2>Benvenuto nel sistema SIFMES-400</h2>
-            <p>Seleziona una voce dal menu in alto per iniziare.</p>
+            <h2>Benvenuto nel sistema di gestione accessi</h2>
+            <p>Schema relazionale collegato alle tabelle persone, ruoli, permessi e stazioni.</p>
+            {% if persona %}
+            <p>Ruoli assegnati: {{ ruoli | map(attribute='descrizione') | join(', ') if ruoli else 'Nessuno' }}</p>
+            {% endif %}
         </div>
         {% endblock %}
     </div>

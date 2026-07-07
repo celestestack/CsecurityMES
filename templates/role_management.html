@@ -11,18 +11,18 @@
 <table class="smc-table">
     <thead>
         <tr>
-            <th>Role N°</th>
-            <th>Name</th>
+            <th>Ruolo N°</th>
             <th>Description</th>
+            <th>Persone assegnate</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
         {% for role in roles %}
         <tr>
-            <td>{{ role.id }}</td>
-            <td class="role-name">{{ role.name }}</td>
-            <td class="role-desc">{{ role.description }}</td>
+            <td>{{ role.id_ruolo }}</td>
+            <td class="role-desc">{{ role.descrizione }}</td>
+            <td>{{ role.persone | length }}</td>
             <td><button class="edit-btn">✏️</button></td>
         </tr>
         {% endfor %}
