@@ -1,0 +1,31 @@
+{% extends 'dashboard.html' %}
+
+{% block content %}
+<div class="breadcrumb">Administration / Role management</div>
+
+<div class="action-bar">
+    <button class="btn-primary">+ New role</button>
+    <input type="text" placeholder="Search..." class="search-bar">
+</div>
+
+<table class="smc-table">
+    <thead>
+        <tr>
+            <th>Role N°</th>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for role in roles %}
+        <tr>
+            <td>{{ role.id }}</td>
+            <td class="role-name">{{ role.name }}</td>
+            <td class="role-desc">{{ role.description }}</td>
+            <td><button class="edit-btn">✏️</button></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

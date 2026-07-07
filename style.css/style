@@ -1,0 +1,97 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background-color: #f4f6f9;
+    color: #333;
+}
+
+/* Login */
+.login-body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #0056b3;
+}
+.login-container {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    text-align: center;
+}
+.login-container input {
+    display: block;
+    width: 90%;
+    margin: 10px auto;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+.login-container button {
+    padding: 10px 20px;
+    background: #0056b3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Navbar */
+.navbar {
+    background-color: #fff;
+    border-bottom: 3px solid #0056b3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+.logo {
+    font-weight: bold;
+    color: #0056b3;
+    font-size: 20px;
+}
+.menu-items a {
+    margin: 0 15px;
+    text-decoration: none;
+    color: #555;
+    font-weight: 500;
+}
+.menu-items a:hover {
+    color: #0056b3;
+}
+
+/* Contenuto e Tabelle */
+.container { padding: 20px; }
+.breadcrumb { font-size: 14px; color: #777; margin-bottom: 15px; }
+
+.action-bar {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+.btn-primary {
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.search-bar { padding: 6px; width: 200px; }
+
+.smc-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+.smc-table th, .smc-table td {
+    border: 1px solid #e0e0e0;
+    padding: 12px;
+    text-align: left;
+}
+.smc-table th { background-color: #f8f9fa; color: #555; }
+.role-name { font-weight: bold; color: #444; }
+.role-desc { color: #666; font-size: 13px; }
+.error { color: red; }
