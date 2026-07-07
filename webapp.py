@@ -1,14 +1,40 @@
 import os
+from urllib.parse import quote_plus
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from dotenv import load_dotenv
 
 from modelli import Persona, Ruolo, db
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 
 app = Flask(__name__)
 app.secret_key = 'password'
 
-# Configurazione Database: usa DATABASE_URL se presente, altrimenti SQLite locale
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///gestione_accessi.db')
+def get_database_uri():
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        return database_url
+
+    mysql_host = os.getenv('MYSQL_HOST')
+    mysql_user = os.getenv('MYSQL_USER')
+    mysql_password = os.getenv('MYSQL_PASSWORD')
+    mysql_database = os.getenv('MYSQL_DATABASE')
+
+    if all([mysql_host, mysql_user, mysql_password, mysql_database]):
+        mysql_port = os.getenv('MYSQL_PORT', '3306')
+        return (
+            'mysql+pymysql://'
+            f'{quote_plus(mysql_user)}:{quote_plus(mysql_password)}'
+            f'@{mysql_host}:{mysql_port}/{mysql_database}'
+        )
+
+    return 'sqlite:///gestione_accessi.db'
+
+
+# Configurazione Database: priorita a DATABASE_URL, poi variabili MySQL, infine SQLite locale
+app.config['SQLALCHEMY_DATABASE_URI'] = get_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
