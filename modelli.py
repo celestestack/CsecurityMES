@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -20,6 +22,7 @@ class Persona(db.Model):
     telefono = db.Column(db.String(30), nullable=True)
 
     ruoli = db.relationship('Ruolo', secondary=persone_ruoli, back_populates='persone')
+    log_movimenti = db.relationship('LogMovimentoUtente', back_populates='persona')
 
 
 class Ruolo(db.Model):
@@ -37,7 +40,6 @@ class Permesso(db.Model):
 
     id_permesso = db.Column(db.Integer, primary_key=True)
     nome_permesso = db.Column(db.String(50), nullable=False, unique=True)
-    descrizione = db.Column(db.String(255), nullable=False)
 
     assegnazioni = db.relationship('RuoloStazionePermesso', back_populates='permesso', cascade='all, delete-orphan')
 
@@ -62,3 +64,20 @@ class RuoloStazionePermesso(db.Model):
     ruolo = db.relationship('Ruolo', back_populates='assegnazioni')
     stazione = db.relationship('Stazione', back_populates='assegnazioni')
     permesso = db.relationship('Permesso', back_populates='assegnazioni')
+
+
+class LogMovimentoUtente(db.Model):
+    __tablename__ = 'log_movimenti_utenti'
+
+    id_log = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    id_persona = db.Column(db.Integer, db.ForeignKey('persone.id_persona', ondelete='SET NULL'), nullable=True)
+    username = db.Column(db.String(50), nullable=False)
+    categoria = db.Column(db.String(30), nullable=False)
+    esito = db.Column(db.String(20), nullable=False)
+    azione = db.Column(db.String(100), nullable=False)
+    dettaglio = db.Column(db.String(255), nullable=False)
+    indirizzo_ip = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+
+    persona = db.relationship('Persona', back_populates='log_movimenti')

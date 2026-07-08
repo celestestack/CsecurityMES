@@ -1,0 +1,68 @@
+{% extends 'dashboard.html' %}
+
+{% block content %}
+<div class="breadcrumb">Supervision / User activity logs</div>
+
+<section class="movement-panel supervision-panel" aria-label="User activity logs">
+    <div class="movement-header">
+        <div>
+            <h2>Access and activity trace</h2>
+            <p>Log persistenti registrati nel database MySQL</p>
+        </div>
+        <div class="line-status">
+            <span class="status-dot"></span>
+            Recording
+        </div>
+    </div>
+
+    <div class="movement-metrics" aria-label="Log metrics">
+        <div>
+            <span class="metric-label">Log totali</span>
+            <strong>{{ stats.totali }}</strong>
+        </div>
+        <div>
+            <span class="metric-label">Accessi OK</span>
+            <strong>{{ stats.accessi_ok }}</strong>
+        </div>
+        <div>
+            <span class="metric-label">Negati</span>
+            <strong>{{ stats.negati }}</strong>
+        </div>
+        <div>
+            <span class="metric-label">Registrazioni</span>
+            <strong>{{ stats.registrazioni }}</strong>
+        </div>
+    </div>
+
+    <div class="log-toolbar">
+        <span class="mono">Ultimi {{ logs | length }} movimenti</span>
+        <a class="edit-btn" href="{{ url_for('supervision') }}">Refresh</a>
+    </div>
+
+    <div class="movement-log supervision-log" role="table" aria-label="Log utenti">
+        <div class="log-row supervision-log-head" role="row">
+            <span>Time</span>
+            <span>Esito</span>
+            <span>Utente</span>
+            <span>Categoria</span>
+            <span>Azione</span>
+            <span>Dettaglio</span>
+        </div>
+
+        {% for log in logs %}
+        <div class="log-row supervision-log-row {{ 'is-denied' if log.esito == 'NEGATO' else 'is-success' if log.categoria == 'ACCESSO' and log.esito == 'OK' else '' }}" role="row">
+            <span class="log-time mono">{{ log.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+            <span class="log-level mono">{{ log.esito }}</span>
+            <span class="log-station">{{ log.username }}</span>
+            <span class="log-station">{{ log.categoria }}</span>
+            <span class="log-message">{{ log.azione }}</span>
+            <span class="log-message">{{ log.dettaglio }}</span>
+        </div>
+        {% else %}
+        <div class="log-row supervision-log-row" role="row">
+            <span class="log-message">Nessun movimento registrato.</span>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

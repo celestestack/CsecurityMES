@@ -3,29 +3,141 @@
 {% block content %}
 <div class="breadcrumb">Administration / Role management</div>
 
-<div class="action-bar">
-    <button class="btn-primary">+ New role</button>
-    <input type="text" placeholder="Search..." class="search-bar">
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="action-bar role-action-bar">
+    <input type="text" placeholder="Search..." class="search-bar" id="role-search">
 </div>
 
-<table class="smc-table">
+<table class="smc-table" id="roles-table">
     <thead>
         <tr>
-            <th>Ruolo N°</th>
+            <th>Ruolo N.</th>
             <th>Description</th>
+            <th>Permessi</th>
             <th>Persone assegnate</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
         {% for role in roles %}
+        {% set permission_summary = role_permission_summaries.get(role.id_ruolo) %}
         <tr>
             <td>{{ role.id_ruolo }}</td>
             <td class="role-desc">{{ role.descrizione }}</td>
+            <td class="permission-desc" title="{{ permission_summary.title if permission_summary else 'Nessun permesso associato' }}">
+                {% if permission_summary and permission_summary.preview %}
+                <div class="permission-chips">
+                    {% for permission in permission_summary.preview %}
+                    <span>{{ permission }}</span>
+                    {% endfor %}
+                    {% if permission_summary.extra_count %}
+                    <button class="permission-more" type="button" aria-expanded="false">
+                        +{{ permission_summary.extra_count }} altri
+                    </button>
+                    {% endif %}
+                </div>
+                {% if permission_summary.extra_count %}
+                <div class="permission-extra" hidden>
+                    {% for permission in permission_summary.extra %}
+                    <span>{{ permission }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% else %}
+                <span class="permission-empty">Nessun permesso</span>
+                {% endif %}
+            </td>
             <td>{{ role.persone | length }}</td>
-            <td><button class="edit-btn">✏️</button></td>
+            <td>
+                <button
+                    class="edit-btn role-edit-btn"
+                    type="button"
+                    title="Modifica ruolo"
+                    data-id="{{ role.id_ruolo }}"
+                    data-descrizione="{{ role.descrizione }}"
+                >✏️</button>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+
+<div class="modal-backdrop" id="edit-role-modal" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-role-title">
+        <div class="modal-header">
+            <h2 id="edit-role-title">Edit role</h2>
+            <button class="modal-close" type="button" data-close-modal>&times;</button>
+        </div>
+        <form method="POST" action="" class="modal-form" id="edit-role-form">
+            <label>
+                Descrizione
+                <input type="text" name="descrizione" id="edit-descrizione" required>
+            </label>
+
+            <div class="modal-actions">
+                <button class="edit-btn" type="button" data-close-modal>Cancel</button>
+                <button class="btn-primary" type="submit">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openModal(id) {
+        const modal = document.getElementById(id);
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        const firstInput = modal.querySelector('input');
+        if (firstInput) firstInput.focus();
+    }
+
+    function closeModal(modal) {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    document.querySelectorAll('[data-close-modal]').forEach(button => {
+        button.addEventListener('click', () => closeModal(button.closest('.modal-backdrop')));
+    });
+
+    document.querySelectorAll('.modal-backdrop').forEach(modal => {
+        modal.addEventListener('click', event => {
+            if (event.target === modal) closeModal(modal);
+        });
+    });
+
+    document.querySelectorAll('.role-edit-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.getElementById('edit-role-form').action = `/role-management/${button.dataset.id}/edit`;
+            document.getElementById('edit-descrizione').value = button.dataset.descrizione;
+            openModal('edit-role-modal');
+        });
+    });
+
+    document.getElementById('role-search').addEventListener('input', event => {
+        const term = event.target.value.toLowerCase();
+        document.querySelectorAll('#roles-table tbody tr').forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+        });
+    });
+
+    document.querySelectorAll('.permission-more').forEach(button => {
+        button.addEventListener('click', () => {
+            const extra = button.closest('.permission-desc').querySelector('.permission-extra');
+            const isOpen = !extra.hidden;
+            extra.hidden = isOpen;
+            button.setAttribute('aria-expanded', String(!isOpen));
+            button.textContent = isOpen
+                ? `+${extra.children.length} altri`
+                : 'Nascondi';
+        });
+    });
+</script>
 {% endblock %}

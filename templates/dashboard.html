@@ -13,7 +13,7 @@
             <a href="{{ url_for('user_management') }}">Management (Users)</a>
             <a href="{{ url_for('role_management') }}">Administration (Roles)</a>
             <a href="{{ url_for('movement') }}">Movement</a>
-            <a href="#">Supervision</a>
+            <a href="{{ url_for('supervision') }}">Supervision</a>
         </div>
         <div class="user-info">
             <span>{{ session.get('display_name', session.get('username', 'Utente')) }}</span> | 

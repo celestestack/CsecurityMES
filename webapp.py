@@ -1,13 +1,14 @@
 import os
 import secrets
 import string
+from collections import defaultdict
 from urllib.parse import quote_plus
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from dotenv import load_dotenv
 from sqlalchemy import inspect, text
 
-from modelli import Persona, Ruolo, db
+from modelli import LogMovimentoUtente, Persona, Ruolo, db
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
@@ -88,6 +89,55 @@ def get_logged_persona():
     return None
 
 
+def log_activity(categoria, esito, azione, dettaglio, persona=None, username=None):
+    actor = persona or get_logged_persona()
+    actor_username = (username or (actor.username if actor else 'sconosciuto'))[:50]
+    user_agent = request.headers.get('User-Agent', '')[:255] if request else ''
+
+    db.session.add(LogMovimentoUtente(
+        persona=actor,
+        username=actor_username,
+        categoria=categoria[:30],
+        esito=esito[:20],
+        azione=azione[:100],
+        dettaglio=dettaglio[:255],
+        indirizzo_ip=request.remote_addr if request else None,
+        user_agent=user_agent,
+    ))
+    db.session.commit()
+
+
+def build_role_permission_summaries(ruoli):
+    summaries = {}
+    for ruolo in ruoli:
+        permissions_by_station = defaultdict(list)
+        for assegnazione in ruolo.assegnazioni:
+            station_name = assegnazione.stazione.descrizione if assegnazione.stazione else 'Stazione non definita'
+            permission_name = assegnazione.permesso.nome_permesso if assegnazione.permesso else 'Permesso non definito'
+            permissions_by_station[station_name].append(permission_name)
+
+        permission_names = []
+        detail_parts = []
+        for station_name, permission_names in permissions_by_station.items():
+            unique_permissions = sorted(set(permission_names))
+            detail_parts.append(f'{station_name}: {", ".join(unique_permissions)}')
+
+        relevant_permissions = sorted({
+            assegnazione.permesso.nome_permesso
+            for assegnazione in ruolo.assegnazioni
+            if assegnazione.permesso
+        })
+
+        summaries[ruolo.id_ruolo] = {
+            'preview': relevant_permissions[:3],
+            'extra': relevant_permissions[3:],
+            'extra_count': max(len(relevant_permissions) - 3, 0),
+            'title': ' | '.join(detail_parts) if detail_parts else 'Nessun permesso associato',
+        }
+
+    return summaries
+
+
 @app.route('/')
 def index():
     if 'persona_id' in session:
@@ -114,6 +164,15 @@ def login():
             # Indirizza l'utente alla schermata del codice 2FA
             return redirect(url_for('verify_2fa_page'))
 
+        known_persona = Persona.query.filter_by(username=username).first() if username else None
+        log_activity(
+            'ACCESSO',
+            'NEGATO',
+            'Login rifiutato',
+            'Credenziali non valide',
+            persona=known_persona,
+            username=username or 'sconosciuto',
+        )
         flash('Credenziali non valide!', 'danger')
 
     return render_template('login.html')
@@ -138,11 +197,22 @@ def verify_2fa_page():
 
         if codice_inserito == FALSO_CODICE_OTP:
             # Codice corretto: promuove la sessione a definitiva
+            persona = Persona.query.get(session['pre_auth_persona_id'])
             session['persona_id'] = session.pop('pre_auth_persona_id')
             session['username'] = session.pop('pre_auth_username')
             session['display_name'] = session.pop('pre_auth_display_name')
+            log_activity('ACCESSO', 'OK', 'Login completato', 'Autenticazione 2FA completata', persona=persona)
             return redirect(url_for('dashboard'))
         else:
+            known_persona = Persona.query.get(session.get('pre_auth_persona_id'))
+            log_activity(
+                'ACCESSO',
+                'NEGATO',
+                'Codice 2FA rifiutato',
+                'Codice di verifica non valido',
+                persona=known_persona,
+                username=session.get('pre_auth_username', 'sconosciuto'),
+            )
             flash('Codice di verifica non valido! Riprova usando 0000.', 'danger')
 
     return render_template('verify_2fa.html')
@@ -212,6 +282,7 @@ def create_user():
     persona.ruoli = Ruolo.query.filter(Ruolo.id_ruolo.in_(role_ids)).all() if role_ids else []
     db.session.add(persona)
     db.session.commit()
+    log_activity('REGISTRAZIONE', 'OK', 'Utente creato', f'Creato utente {username}')
     flash(f'Utente {username} creato. Password iniziale: {password}', 'success')
     return redirect(url_for('user_management'))
 
@@ -248,6 +319,7 @@ def edit_user(persona_id):
     persona.ruoli = Ruolo.query.filter(Ruolo.id_ruolo.in_(role_ids)).all() if role_ids else []
 
     db.session.commit()
+    log_activity('MOVIMENTO', 'OK', 'Utente aggiornato', f'Aggiornato utente {persona.username}')
     flash(f'Utente {persona.username} aggiornato.', 'success')
     return redirect(url_for('user_management'))
 
@@ -259,7 +331,36 @@ def role_management():
         return redirect_response
 
     ruoli = Ruolo.query.order_by(Ruolo.id_ruolo).all()
-    return render_template('role_management.html', roles=ruoli)
+    return render_template(
+        'role_management.html',
+        roles=ruoli,
+        role_permission_summaries=build_role_permission_summaries(ruoli),
+    )
+
+
+@app.route('/role-management/<int:role_id>/edit', methods=['POST'])
+def edit_role(role_id):
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    ruolo = Ruolo.query.get_or_404(role_id)
+    descrizione = request.form.get('descrizione', '').strip()
+
+    if not descrizione:
+        flash('La descrizione del ruolo e obbligatoria.', 'danger')
+        return redirect(url_for('role_management'))
+
+    duplicate = Ruolo.query.filter(Ruolo.descrizione == descrizione, Ruolo.id_ruolo != ruolo.id_ruolo).first()
+    if duplicate:
+        flash('Questo ruolo e gia presente nel database.', 'danger')
+        return redirect(url_for('role_management'))
+
+    ruolo.descrizione = descrizione
+    db.session.commit()
+    log_activity('MOVIMENTO', 'OK', 'Ruolo aggiornato', f'Aggiornato ruolo {ruolo.descrizione}')
+    flash(f'Ruolo {ruolo.descrizione} aggiornato.', 'success')
+    return redirect(url_for('role_management'))
 
 
 @app.route('/movement')
@@ -268,11 +369,30 @@ def movement():
     if redirect_response:
         return redirect_response
 
+    log_activity('MOVIMENTO', 'OK', 'Apertura Movement', 'Accesso alla pagina Movement')
     return render_template('movement.html')
+
+
+@app.route('/supervision')
+def supervision():
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    logs = LogMovimentoUtente.query.order_by(LogMovimentoUtente.timestamp.desc(), LogMovimentoUtente.id_log.desc()).limit(250).all()
+    stats = {
+        'totali': LogMovimentoUtente.query.count(),
+        'accessi_ok': LogMovimentoUtente.query.filter_by(categoria='ACCESSO', esito='OK').count(),
+        'negati': LogMovimentoUtente.query.filter_by(esito='NEGATO').count(),
+        'registrazioni': LogMovimentoUtente.query.filter_by(categoria='REGISTRAZIONE').count(),
+    }
+    return render_template('supervision.html', logs=logs, stats=stats)
 
 
 @app.route('/logout')
 def logout():
+    if 'persona_id' in session:
+        log_activity('ACCESSO', 'OK', 'Logout', 'Sessione terminata')
     session.clear()
     flash('Logout effettuato con successo.', 'success')
     return redirect(url_for('login'))
