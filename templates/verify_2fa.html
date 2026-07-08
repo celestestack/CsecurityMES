@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SMC SIFMES-400 - Verifica 2FA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .otp-container {
+            display: flex;
+            justify-content: space-between;
+            margin: 25px 0;
+            gap: 10px;
+        }
+        .otp-input {
+            width: 55px;
+            height: 55px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--canvas);
+            color: var(--ink);
+            font-family: 'IBM Plex Mono', monospace;
+        }
+        .otp-input:focus {
+            outline: none;
+            border-color: var(--cyan-500);
+            background: var(--surface);
+            box-shadow: 0 0 0 3px rgba(31, 182, 201, 0.15);
+        }
+        .info-text {
+            font-size: 13px;
+            color: var(--ink-soft);
+            line-height: 1.5;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <h2>SMC · SIFMES-400</h2>
+        <h3>Verifica in due passaggi</h3>
+        
+        <p class="info-text">
+            È stata richiesta una verifica aggiuntiva. Inserisci il codice di sicurezza temporaneo generato per l'account <strong>{{ session.get('pre_auth_username') }}</strong>.
+        </p>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <p class="error" style="margin-bottom: 15px;">{{ messages[0] }}</p>
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('verify_2fa_page') }}" id="otp-form">
+            <div class="otp-container">
+                <input type="text" name="otp1" class="otp-input" maxlength="1" pattern="[0-9]" required oninput="moveFocus(this, 1)" autocomplete="off" autofocus>
+                <input type="text" name="otp2" class="otp-input" maxlength="1" pattern="[0-9]" required oninput="moveFocus(this, 2)" autocomplete="off">
+                <input type="text" name="otp3" class="otp-input" maxlength="1" pattern="[0-9]" required oninput="moveFocus(this, 3)" autocomplete="off">
+                <input type="text" name="otp4" class="otp-input" maxlength="1" pattern="[0-9]" required oninput="moveFocus(this, 4)" autocomplete="off">
+            </div>
+            <button type="submit">Verifica Codice</button>
+        </form>
+        
+        <p style="margin-top: 25px; font-size: 13px;">
+            <a href="{{ url_for('login') }}" style="color: var(--cyan-500); text-decoration: none; font-weight: 500;">Torna al Login</a>
+        </p>
+    </div>
+
+    <script>
+        function moveFocus(currentInput, index) {
+            // Avanza automaticamente al quadratino successivo se viene digitato un numero
+            if (currentInput.value.length >= 1 && index < 4) {
+                document.querySelectorAll('.otp-input')[index].focus();
+            }
+        }
+
+        // Permette di tornare indietro al quadratino precedente usando il tasto 'Backspace'
+        document.querySelectorAll('.otp-input').forEach((input, idx) => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === "Backspace" && input.value.length === 0 && idx > 0) {
+                    document.querySelectorAll('.otp-input')[idx - 1].focus();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

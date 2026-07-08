@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 
 from modelli import Persona, Ruolo, db
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))\nload_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 
 app = Flask(__name__)
 app.secret_key = 'password'
@@ -16,7 +15,6 @@ def get_database_uri():
     database_url = os.getenv('DATABASE_URL')
     if database_url:
         return database_url
-
     mysql_host = os.getenv('MYSQL_HOST')
     mysql_user = os.getenv('MYSQL_USER')
     mysql_password = os.getenv('MYSQL_PASSWORD')
@@ -33,69 +31,84 @@ def get_database_uri():
     return 'sqlite:///gestione_accessi.db'
 
 
-# Configurazione Database: priorita a DATABASE_URL, poi variabili MySQL, infine SQLite locale
+# Configurazione Database: priorità a DATABASE_URL, poi variabili MySQL, infine SQLite locale
 app.config['SQLALCHEMY_DATABASE_URI'] = get_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
 
-@app.before_request
-def create_tables():
-    db.create_all()
-
-    if not Ruolo.query.first():
-        ruoli_iniziali = [
-            Ruolo(id_ruolo=1, descrizione="Instructor - system administrator"),
-            Ruolo(id_ruolo=2, descrizione="Production manager - planning and preparation of orders"),
-            Ruolo(id_ruolo=3, descrizione="Maintenance responsible - maintenance of stations and components"),
-            Ruolo(id_ruolo=4, descrizione="Quality manager - quality verification and statistical control"),
-            Ruolo(id_ruolo=5, descrizione="Logistics - warehouse and stock management"),
-            Ruolo(id_ruolo=6, descrizione="Client - order creation and monitoring"),
-            Ruolo(id_ruolo=7, descrizione="Operator - interaction with stations and alarms"),
-            Ruolo(id_ruolo=8, descrizione="Guest - role used for visits"),
-        ]
-        db.session.bulk_save_objects(ruoli_iniziali)
-        db.session.commit()
-
-    if not Persona.query.filter_by(username='admin').first():
-        admin_user = Persona(nome='Admin', cognome='Sistema', username='admin', password='password')
-        first_role = Ruolo.query.filter_by(id_ruolo=1).first()
-        if first_role:
-            admin_user.ruoli.append(first_role)
-        db.session.add(admin_user)
-        db.session.commit()
-
-
 def require_login():
+    """Controlla se l'utente è autenticato. Se no, restituisce un redirect alla pagina di login."""
     if 'persona_id' not in session:
+        flash('Effettua prima il login.', 'danger')
         return redirect(url_for('login'))
     return None
 
 
 def get_logged_persona():
+    """Restituisce l'oggetto Persona dell'utente attualmente loggato."""
     persona_id = session.get('persona_id')
-    if not persona_id:
-        return None
-    return db.session.get(Persona, persona_id)
+    if persona_id:
+        return Persona.query.get(persona_id)
+    return None
 
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
+def index():
+    if 'persona_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username')
+        password = request.form.get('password')
 
         persona = Persona.query.filter_by(username=username, password=password).first()
         if persona:
-            session['persona_id'] = persona.id_persona
-            session['username'] = persona.username
-            session['display_name'] = f'{persona.nome} {persona.cognome}'.strip()
-            return redirect(url_for('dashboard'))
+            # Imposta le variabili temporanee di pre-autenticazione
+            session['pre_auth_persona_id'] = persona.id_persona
+            session['pre_auth_username'] = persona.username
+            session['pre_auth_display_name'] = f'{persona.nome} {persona.cognome}'.strip()
+            
+            # Indirizza l'utente alla schermata del codice 2FA
+            return redirect(url_for('verify_2fa_page'))
 
         flash('Credenziali non valide!', 'danger')
 
     return render_template('login.html')
+
+
+@app.route('/verify-2fa', methods=['GET', 'POST'])
+def verify_2fa_page():
+    # Impedisce l'accesso alla pagina se l'utente non ha superato il primo step di login
+    if 'pre_auth_persona_id' not in session:
+        flash('Effettua prima il login.', 'danger')
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        # Recupera i singoli caratteri inseriti nel form
+        digit1 = request.form.get('otp1', '')
+        digit2 = request.form.get('otp2', '')
+        digit3 = request.form.get('otp3', '')
+        digit4 = request.form.get('otp4', '')
+        
+        codice_inserito = f"{digit1}{digit2}{digit3}{digit4}"
+        FALSO_CODICE_OTP = "0000"
+
+        if codice_inserito == FALSO_CODICE_OTP:
+            # Codice corretto: promuove la sessione a definitiva
+            session['persona_id'] = session.pop('pre_auth_persona_id')
+            session['username'] = session.pop('pre_auth_username')
+            session['display_name'] = session.pop('pre_auth_display_name')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Codice di verifica non valido! Riprova usando 0000.', 'danger')
+
+    return render_template('verify_2fa.html')
 
 
 @app.route('/dashboard')
@@ -131,8 +144,11 @@ def role_management():
 @app.route('/logout')
 def logout():
     session.clear()
+    flash('Logout effettuato con successo.', 'success')
     return redirect(url_for('login'))
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    with app.app_context():
+        db.create_all()  # Crea le tabelle se non esistono (valido principalmente per SQLite locale)
+    app.run(debug=True, host='0.0.0.0', port=5000)
