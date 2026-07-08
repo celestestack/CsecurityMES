@@ -1,8 +1,11 @@
 import os
+import secrets
+import string
 from urllib.parse import quote_plus
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from dotenv import load_dotenv
+from sqlalchemy import inspect, text
 
 from modelli import Persona, Ruolo, db
 
@@ -37,6 +40,36 @@ app.config['SQLALCHEMY_DATABASE_URI'] = get_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
+
+
+def generate_strong_password(length=14):
+    alphabet = string.ascii_letters + string.digits + '!@#$%&*?-_'
+    required = [
+        secrets.choice(string.ascii_lowercase),
+        secrets.choice(string.ascii_uppercase),
+        secrets.choice(string.digits),
+        secrets.choice('!@#$%&*?-_'),
+    ]
+    required.extend(secrets.choice(alphabet) for _ in range(length - len(required)))
+    secrets.SystemRandom().shuffle(required)
+    return ''.join(required)
+
+
+def split_display_name(username):
+    parts = username.replace('.', ' ').replace('_', ' ').split()
+    if not parts:
+        return username, '-'
+    nome = parts[0].capitalize()
+    cognome = ' '.join(part.capitalize() for part in parts[1:]) or '-'
+    return nome, cognome
+
+
+def ensure_database_schema():
+    inspector = inspect(db.engine)
+    columns = {column['name'] for column in inspector.get_columns('persone')}
+    if 'telefono' not in columns:
+        db.session.execute(text('ALTER TABLE persone ADD COLUMN telefono VARCHAR(30) NULL'))
+        db.session.commit()
 
 
 def require_login():
@@ -132,7 +165,91 @@ def user_management():
         return redirect_response
 
     persone = Persona.query.order_by(Persona.id_persona).all()
-    return render_template('user_management.html', persone=persone, users=persone)
+    ruoli = Ruolo.query.order_by(Ruolo.descrizione).all()
+    generated_password = generate_strong_password()
+    return render_template(
+        'user_management.html',
+        persone=persone,
+        users=persone,
+        ruoli=ruoli,
+        generated_password=generated_password,
+    )
+
+
+@app.route('/user-management/create', methods=['POST'])
+def create_user():
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    username = request.form.get('username', '').strip()
+    telefono = request.form.get('telefono', '').strip()
+    password = request.form.get('password', '').strip() or generate_strong_password()
+    nome = request.form.get('nome', '').strip()
+    cognome = request.form.get('cognome', '').strip()
+    role_ids = request.form.getlist('ruoli')
+
+    if not username or not telefono:
+        flash('Nome utente e numero di telefono sono obbligatori.', 'danger')
+        return redirect(url_for('user_management'))
+
+    if Persona.query.filter_by(username=username).first():
+        flash('Nome utente gia presente nel database.', 'danger')
+        return redirect(url_for('user_management'))
+
+    if not nome or not cognome:
+        auto_nome, auto_cognome = split_display_name(username)
+        nome = nome or auto_nome
+        cognome = cognome or auto_cognome
+
+    persona = Persona(
+        nome=nome,
+        cognome=cognome,
+        username=username,
+        password=password,
+        telefono=telefono,
+    )
+    persona.ruoli = Ruolo.query.filter(Ruolo.id_ruolo.in_(role_ids)).all() if role_ids else []
+    db.session.add(persona)
+    db.session.commit()
+    flash(f'Utente {username} creato. Password iniziale: {password}', 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/user-management/<int:persona_id>/edit', methods=['POST'])
+def edit_user(persona_id):
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    persona = Persona.query.get_or_404(persona_id)
+    username = request.form.get('username', '').strip()
+    telefono = request.form.get('telefono', '').strip()
+    nome = request.form.get('nome', '').strip()
+    cognome = request.form.get('cognome', '').strip()
+    password = request.form.get('password', '').strip()
+    role_ids = request.form.getlist('ruoli')
+
+    if not username or not telefono:
+        flash('Nome utente e numero di telefono sono obbligatori.', 'danger')
+        return redirect(url_for('user_management'))
+
+    duplicate = Persona.query.filter(Persona.username == username, Persona.id_persona != persona.id_persona).first()
+    if duplicate:
+        flash('Nome utente gia assegnato a un altro utente.', 'danger')
+        return redirect(url_for('user_management'))
+
+    persona.username = username
+    persona.telefono = telefono
+    persona.nome = nome or persona.nome
+    persona.cognome = cognome or persona.cognome
+    if password:
+        persona.password = password
+    persona.ruoli = Ruolo.query.filter(Ruolo.id_ruolo.in_(role_ids)).all() if role_ids else []
+
+    db.session.commit()
+    flash(f'Utente {persona.username} aggiornato.', 'success')
+    return redirect(url_for('user_management'))
 
 
 @app.route('/role-management')
@@ -164,4 +281,5 @@ def logout():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Crea le tabelle se non esistono (valido principalmente per SQLite locale)
+        ensure_database_schema()
     app.run(debug=True, host='0.0.0.0', port=5000)

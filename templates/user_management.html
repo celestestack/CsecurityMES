@@ -3,18 +3,27 @@
 {% block content %}
 <div class="breadcrumb">Administration / User management</div>
 
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
 <div class="action-bar">
-    <button class="btn-primary">+ New user</button>
-    <input type="text" placeholder="Search..." class="search-bar">
+    <button class="btn-primary" type="button" data-open-modal="new-user-modal">+ New user</button>
+    <input type="text" placeholder="Search..." class="search-bar" id="user-search">
 </div>
 
-<table class="smc-table">
+<table class="smc-table" id="users-table">
     <thead>
         <tr>
             <th>Persona ID</th>
             <th>Nome</th>
             <th>Cognome</th>
             <th>Username</th>
+            <th>Telefono</th>
             <th>Ruoli assegnati</th>
             <th>Actions</th>
         </tr>
@@ -26,10 +35,212 @@
             <td>{{ persona.nome }}</td>
             <td>{{ persona.cognome }}</td>
             <td>{{ persona.username }}</td>
+            <td class="mono">{{ persona.telefono or '-' }}</td>
             <td class="role-desc">{{ persona.ruoli | map(attribute='descrizione') | join(', ') if persona.ruoli else 'Nessuno' }}</td>
-            <td><button class="edit-btn">✏️</button></td>
+            <td>
+                <button
+                    class="edit-btn user-edit-btn"
+                    type="button"
+                    title="Modifica utente"
+                    data-id="{{ persona.id_persona }}"
+                    data-nome="{{ persona.nome }}"
+                    data-cognome="{{ persona.cognome }}"
+                    data-username="{{ persona.username }}"
+                    data-telefono="{{ persona.telefono or '' }}"
+                    data-roles="{{ persona.ruoli | map(attribute='id_ruolo') | list | join(',') }}"
+                >Edit</button>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+
+<div class="modal-backdrop" id="new-user-modal" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-user-title">
+        <div class="modal-header">
+            <h2 id="new-user-title">New user</h2>
+            <button class="modal-close" type="button" data-close-modal>&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('create_user') }}" class="modal-form">
+            <div class="form-grid">
+                <label>
+                    Nome
+                    <input type="text" name="nome" placeholder="Mario">
+                </label>
+                <label>
+                    Cognome
+                    <input type="text" name="cognome" placeholder="Rossi">
+                </label>
+                <label>
+                    Nome utente
+                    <input type="text" name="username" required placeholder="mario.rossi">
+                </label>
+                <label>
+                    Numero di telefono
+                    <input type="tel" name="telefono" required placeholder="+39 333 123 4567">
+                </label>
+            </div>
+
+            <label>
+                Password generata
+                <div class="password-row">
+                    <input type="text" name="password" id="new-password" class="mono" value="{{ generated_password }}" readonly>
+                    <button class="edit-btn" type="button" data-generate-password="new-password">Generate</button>
+                </div>
+            </label>
+
+            <fieldset class="role-picker">
+                <legend>Ruoli associabili</legend>
+                {% for ruolo in ruoli %}
+                <label>
+                    <input type="checkbox" name="ruoli" value="{{ ruolo.id_ruolo }}">
+                    {{ ruolo.descrizione }}
+                </label>
+                {% endfor %}
+            </fieldset>
+
+            <div class="modal-actions">
+                <button class="edit-btn" type="button" data-close-modal>Cancel</button>
+                <button class="btn-primary" type="submit">Create user</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="edit-user-modal" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
+        <div class="modal-header">
+            <h2 id="edit-user-title">Edit user</h2>
+            <button class="modal-close" type="button" data-close-modal>&times;</button>
+        </div>
+        <form method="POST" action="" class="modal-form" id="edit-user-form">
+            <div class="form-grid">
+                <label>
+                    Nome
+                    <input type="text" name="nome" id="edit-nome" required>
+                </label>
+                <label>
+                    Cognome
+                    <input type="text" name="cognome" id="edit-cognome" required>
+                </label>
+                <label>
+                    Nome utente
+                    <input type="text" name="username" id="edit-username" required>
+                </label>
+                <label>
+                    Numero di telefono
+                    <input type="tel" name="telefono" id="edit-telefono" required>
+                </label>
+            </div>
+
+            <label>
+                Nuova password
+                <div class="password-row">
+                    <input type="text" name="password" id="edit-password" class="mono" placeholder="Lascia vuoto per non cambiarla">
+                    <button class="edit-btn" type="button" data-generate-password="edit-password">Generate</button>
+                </div>
+            </label>
+
+            <fieldset class="role-picker" id="edit-role-picker">
+                <legend>Ruoli associabili</legend>
+                {% for ruolo in ruoli %}
+                <label>
+                    <input type="checkbox" name="ruoli" value="{{ ruolo.id_ruolo }}">
+                    {{ ruolo.descrizione }}
+                </label>
+                {% endfor %}
+            </fieldset>
+
+            <div class="modal-actions">
+                <button class="edit-btn" type="button" data-close-modal>Cancel</button>
+                <button class="btn-primary" type="submit">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openModal(id) {
+        const modal = document.getElementById(id);
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        const firstInput = modal.querySelector('input');
+        if (firstInput) firstInput.focus();
+    }
+
+    function closeModal(modal) {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    function generateStrongPassword(length = 14) {
+        const lower = 'abcdefghijkmnopqrstuvwxyz';
+        const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        const digits = '23456789';
+        const symbols = '!@#$%&*?-_';
+        const all = lower + upper + digits + symbols;
+        const values = [
+            lower[Math.floor(Math.random() * lower.length)],
+            upper[Math.floor(Math.random() * upper.length)],
+            digits[Math.floor(Math.random() * digits.length)],
+            symbols[Math.floor(Math.random() * symbols.length)]
+        ];
+
+        const cryptoValues = new Uint32Array(length - values.length);
+        window.crypto.getRandomValues(cryptoValues);
+        cryptoValues.forEach(value => values.push(all[value % all.length]));
+
+        for (let i = values.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [values[i], values[j]] = [values[j], values[i]];
+        }
+
+        return values.join('');
+    }
+
+    document.querySelectorAll('[data-open-modal]').forEach(button => {
+        button.addEventListener('click', () => openModal(button.dataset.openModal));
+    });
+
+    document.querySelectorAll('[data-close-modal]').forEach(button => {
+        button.addEventListener('click', () => closeModal(button.closest('.modal-backdrop')));
+    });
+
+    document.querySelectorAll('.modal-backdrop').forEach(modal => {
+        modal.addEventListener('click', event => {
+            if (event.target === modal) closeModal(modal);
+        });
+    });
+
+    document.querySelectorAll('[data-generate-password]').forEach(button => {
+        button.addEventListener('click', () => {
+            document.getElementById(button.dataset.generatePassword).value = generateStrongPassword();
+        });
+    });
+
+    document.querySelectorAll('.user-edit-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.getElementById('edit-user-form').action = `/user-management/${button.dataset.id}/edit`;
+            document.getElementById('edit-nome').value = button.dataset.nome;
+            document.getElementById('edit-cognome').value = button.dataset.cognome;
+            document.getElementById('edit-username').value = button.dataset.username;
+            document.getElementById('edit-telefono').value = button.dataset.telefono;
+            document.getElementById('edit-password').value = '';
+
+            const selectedRoles = button.dataset.roles ? button.dataset.roles.split(',') : [];
+            document.querySelectorAll('#edit-role-picker input[type="checkbox"]').forEach(input => {
+                input.checked = selectedRoles.includes(input.value);
+            });
+
+            openModal('edit-user-modal');
+        });
+    });
+
+    document.getElementById('user-search').addEventListener('input', event => {
+        const term = event.target.value.toLowerCase();
+        document.querySelectorAll('#users-table tbody tr').forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+        });
+    });
+</script>
 {% endblock %}

@@ -17,6 +17,7 @@ class Persona(db.Model):
     cognome = db.Column(db.String(50), nullable=False)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
+    telefono = db.Column(db.String(30), nullable=True)
 
     ruoli = db.relationship('Ruolo', secondary=persone_ruoli, back_populates='persone')
 
