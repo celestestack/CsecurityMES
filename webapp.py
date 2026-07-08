@@ -8,7 +8,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from dotenv import load_dotenv
 from sqlalchemy import inspect, text
 
-from modelli import LogMovimentoUtente, Persona, Ruolo, db
+from modelli import LogMovimentoUtente, Persona, Ruolo, RuoloStazionePermesso, Stazione, Permesso, db
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
@@ -71,6 +71,139 @@ def ensure_database_schema():
     if 'telefono' not in columns:
         db.session.execute(text('ALTER TABLE persone ADD COLUMN telefono VARCHAR(30) NULL'))
         db.session.commit()
+
+
+def assign_default_role_permissions():
+    existing = RuoloStazionePermesso.query.count()
+    if existing > 0:
+        return
+
+    permission_map = {perm.nome_permesso.lower(): perm for perm in Permesso.query.all()}
+    station_map = {stazione.descrizione.strip().lower(): stazione for stazione in Stazione.query.all()}
+    default_station = next(iter(station_map.values()), None)
+
+    role_permission_map = {
+        'instructor': [
+            'Gestire gli utenti',
+            'Gestire i ruoli',
+            'Generare simulazione attacchi hacker/guasti',
+            'Eseguire Test/esercizio della macchina',
+            'Pianificare e preparare gli ordini',
+            'Gestire e lanciare gli ordini',
+            'Accedere alle opzioni di manutenzione',
+            'Visualizzare i consumi di energia',
+            'Controllare i processi statistici',
+            'Gestire lo stock/inventario',
+            'Gestire il magazzino',
+            'Gestire lo stato del sistema',
+            'Visualizzare gli allarmi',
+            'Visualizzare lo stato del sistema',
+            'Conduzione della stazione',
+            'Accesso alla flexpendant',
+        ],
+        'production manager': [
+            'Eseguire Test/esercizio della macchina',
+            'Pianificare e preparare gli ordini',
+            'Gestire e lanciare gli ordini',
+            'Controllare i processi statistici',
+            'Gestire lo stato del sistema',
+            'Visualizzare lo stato del sistema',
+            'Visualizzare gli allarmi',
+        ],
+        'production operator': [
+            'Eseguire Test/esercizio della macchina',
+            'Gestire e lanciare gli ordini',
+            'Visualizzare i consumi di energia',
+            'Gestire lo stato del sistema',
+            'Visualizzare gli allarmi',
+            'Visualizzare lo stato del sistema',
+            'Conduzione della stazione',
+            'Accesso alla flexpendant',
+        ],
+        'packaging operator': [
+            'Eseguire Test/esercizio della macchina',
+            'Gestire lo stock/inventario',
+            'Gestire il magazzino',
+            'Visualizzare gli allarmi',
+            'Visualizzare lo stato del sistema',
+            'Conduzione della stazione',
+            'Accesso alla flexpendant',
+        ],
+        'logistic operator': [
+            'Pianificare e preparare gli ordini',
+            'Gestire lo stock/inventario',
+            'Gestire il magazzino',
+            'Visualizzare i consumi di energia',
+            'Visualizzare lo stato del sistema',
+        ],
+        'maintenance responsible': [
+            'Generare simulazione attacchi hacker/guasti',
+            'Eseguire Test/esercizio della macchina',
+            'Accedere alle opzioni di manutenzione',
+            'Visualizzare i consumi di energia',
+            'Visualizzare gli allarmi',
+            'Visualizzare lo stato del sistema',
+        ],
+        'client': [
+            'Creare i propri ordini',
+            'Monitorare i propri ordini',
+            'Visualizzare gli allarmi',
+            'Visualizzare lo stato del sistema',
+        ],
+        'guest': [
+            'Monitorare i propri ordini',
+            'Visualizzare gli allarmi',
+            'Visualizzare lo stato del sistema',
+        ],
+    }
+
+    station_assignment = {
+        'gestire gli utenti': station_map.get('stazione del prelievo box e pallet', default_station),
+        'gestire i ruoli': station_map.get('stazione del prelievo box e pallet', default_station),
+        'generare simulazione attacchi hacker/guasti': station_map.get('stazione di filing', default_station),
+        'eseguire test/esercizio della macchina': station_map.get('stazione di capping', default_station),
+        'pianificare e preparare gli ordini': station_map.get('stazione di storage', default_station),
+        'gestire e lanciare gli ordini': station_map.get('stazione di storage', default_station),
+        'accedere alle opzioni di manutenzione': station_map.get('stazione labeling', default_station),
+        'visualizzare i consumi di energia': station_map.get('stazione di packaging', default_station),
+        'controllare i processi statistici': station_map.get('stazione di package storage', default_station),
+        'gestire lo stock/inventario': station_map.get('stazione di storage', default_station),
+        'gestire il magazzino': station_map.get('stazione di storage', default_station),
+        'gestire lo stato del sistema': station_map.get('stazione di filing', default_station),
+        'creare i propri ordini': station_map.get('stazione di storage', default_station),
+        'monitorare i propri ordini': station_map.get('stazione di storage', default_station),
+        'visualizzare gli allarmi': station_map.get('stazione di packaging', default_station),
+        'visualizzare lo stato del sistema': station_map.get('stazione di package storage', default_station),
+        'conduzione della stazione': station_map.get('stazione di capping', default_station),
+        'accesso alla flexpendant': station_map.get('stazione di capping', default_station),
+    }
+
+    for ruolo in Ruolo.query.all():
+        ruolo_key = ruolo.descrizione.strip().lower()
+        permission_names = role_permission_map.get(ruolo_key, [])
+        if not permission_names:
+            continue
+
+        for perm_name in permission_names:
+            perm = permission_map.get(perm_name.lower())
+            if not perm:
+                continue
+            station = station_assignment.get(perm_name.lower(), default_station)
+            if not station:
+                continue
+            existing = RuoloStazionePermesso.query.filter_by(
+                id_ruolo=ruolo.id_ruolo,
+                id_stazione=station.id_stazione,
+                id_permesso=perm.id_permesso,
+            ).first()
+            if existing:
+                continue
+            db.session.add(RuoloStazionePermesso(
+                ruolo=ruolo,
+                stazione=station,
+                permesso=perm,
+            ))
+    db.session.commit()
 
 
 def require_login():
@@ -402,4 +535,5 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Crea le tabelle se non esistono (valido principalmente per SQLite locale)
         ensure_database_schema()
+        assign_default_role_permissions()
     app.run(debug=True, host='0.0.0.0', port=5000)
