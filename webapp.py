@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 
 from modelli import Persona, Ruolo, db
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))\nload_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 
 app = Flask(__name__)
 app.secret_key = 'password'
@@ -64,10 +65,13 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
 
         persona = Persona.query.filter_by(username=username, password=password).first()
+        if not persona and password[:1] in ("'", '"'):
+            persona = Persona.query.filter_by(username=username, password=password[1:]).first()
+
         if persona:
             # Imposta le variabili temporanee di pre-autenticazione
             session['pre_auth_persona_id'] = persona.id_persona
@@ -139,6 +143,15 @@ def role_management():
 
     ruoli = Ruolo.query.order_by(Ruolo.id_ruolo).all()
     return render_template('role_management.html', roles=ruoli)
+
+
+@app.route('/movement')
+def movement():
+    redirect_response = require_login()
+    if redirect_response:
+        return redirect_response
+
+    return render_template('movement.html')
 
 
 @app.route('/logout')

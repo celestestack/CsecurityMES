@@ -1,0 +1,313 @@
+{% extends 'dashboard.html' %}
+
+{% block content %}
+<div class="breadcrumb">Operations / Movement</div>
+
+<section class="movement-layout" aria-label="Movement line monitoring">
+    <div class="movement-panel">
+        <div class="movement-header">
+            <div>
+                <h2>Automated container line</h2>
+                <p>Live movement log - sessione operatore attiva</p>
+            </div>
+            <div class="line-status">
+                <span class="status-dot"></span>
+                Running
+            </div>
+        </div>
+
+        <div class="process-strip" aria-label="Process order">
+            <span>Pallet and container feeding</span>
+            <span>Container filling</span>
+            <span>Capping</span>
+            <span>Container warehouse</span>
+            <span>Labelling and dispatching</span>
+            <span>Container packing</span>
+            <span>Pack warehouse</span>
+        </div>
+
+        <div class="movement-metrics" aria-label="Line metrics">
+            <div>
+                <span class="metric-label">Batch</span>
+                <strong id="batch-id">MES-400-0000</strong>
+            </div>
+            <div>
+                <span class="metric-label">Containers</span>
+                <strong id="container-count">0</strong>
+            </div>
+            <div>
+                <span class="metric-label">Errors</span>
+                <strong id="error-count">0</strong>
+            </div>
+            <div>
+                <span class="metric-label">Last cycle</span>
+                <strong id="cycle-time">0.0s</strong>
+            </div>
+        </div>
+
+        <div class="log-toolbar">
+            <span class="mono" id="line-clock">--:--:--</span>
+            <button type="button" class="edit-btn" id="enable-notifications">Enable notifications</button>
+        </div>
+
+        <div class="movement-log" id="movement-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+    </div>
+
+    <aside class="movement-side">
+        <h3>Current cycle</h3>
+        <dl>
+            <div>
+                <dt>Container</dt>
+                <dd id="current-container">CNT-000000</dd>
+            </div>
+            <div>
+                <dt>Palette mix</dt>
+                <dd><span class="ball red"></span> red <span class="ball yellow"></span> yellow <span class="ball blue"></span> blue</dd>
+            </div>
+            <div>
+                <dt>Mode</dt>
+                <dd>Auto / MES handshake</dd>
+            </div>
+        </dl>
+    </aside>
+</section>
+
+<div class="log-toast" id="log-toast" role="status" aria-live="assertive"></div>
+
+<script>
+    const stations = [
+        {
+            name: 'Pallet and container feeding station',
+            code: 'ST-010',
+            messages: [
+                'Pallet %pallet detected at infeed photocell PE-010; container %container indexed on conveyor CV-01.',
+                'Servo pusher AX-01 completed transfer to nest N1; vacuum check stable at %vacuum kPa.',
+                'RFID handshake accepted for %container; route released to filling buffer.'
+            ],
+            errors: [
+                'Infeed timeout on PE-010 while loading %container; pallet %pallet requires operator inspection.',
+                'Container %container not seated in nest N1; AX-01 stopped before filling transfer.'
+            ]
+        },
+        {
+            name: 'Container filling station',
+            code: 'ST-020',
+            messages: [
+                'Dosing recipe loaded for %container: red %red pcs, yellow %yellow pcs, blue %blue pcs.',
+                'Weigh cell WC-020 confirmed target mass %mass g; color feeder vibration within tolerance.',
+                'Vision check accepted fill level on %container; mixed balls distributed without overflow.'
+            ],
+            errors: [
+                'Blue feeder low-flow alarm during %container; expected %blue pcs, counter paused for refill.',
+                'Fill weight drift detected on WC-020 for %container; batch held for quality confirmation.'
+            ]
+        },
+        {
+            name: 'Capping station',
+            code: 'ST-030',
+            messages: [
+                'Cap feeder bowl delivered cap CAP-%cap; pick head PH-030 vacuum %vacuum kPa.',
+                'Torque head TH-030 closed %container at %torque Nm; tamper band sensor OK.',
+                'Cap presence camera passed %container; transfer released to warehouse lane.'
+            ],
+            errors: [
+                'Torque below limit on %container: measured %torque Nm; reject diverter prepared.',
+                'Cap presence sensor failed on %container; capping station cycle aborted.'
+            ]
+        },
+        {
+            name: 'Container warehouse station',
+            code: 'ST-040',
+            messages: [
+                'ASRS shuttle assigned slot WH-C%slot for %container; entry gate clear.',
+                'Container %container stored in buffer lane %lane; MES inventory updated.',
+                'Warehouse retrieval request accepted for %container; dispatch sequence confirmed.'
+            ],
+            errors: [
+                'Slot WH-C%slot blocked during storage of %container; shuttle retry in progress.',
+                'Barcode mismatch at warehouse entry for %container; inventory update rejected.'
+            ]
+        },
+        {
+            name: 'Container labelling and dispatching station',
+            code: 'ST-050',
+            messages: [
+                'Label template LB-%label printed for %container; lot and expiry data verified.',
+                'Applicator AP-050 placed label on %container; scanner grade %grade accepted.',
+                'Dispatch diverter sent %container to packing lane %lane with MES confirmation.'
+            ],
+            errors: [
+                'Scanner grade %grade below threshold on %container; label reprint requested.',
+                'Applicator AP-050 pressure drop while labelling %container; line slowed to safe speed.'
+            ]
+        },
+        {
+            name: 'Container packing station',
+            code: 'ST-060',
+            messages: [
+                'Pack %pack opened; %container loaded into position %position of 6.',
+                'Case former CF-060 sealed pack %pack; glue temperature %glue C stable.',
+                'Pack %pack weight check passed at %packWeight kg; released to outbound warehouse.'
+            ],
+            errors: [
+                'Pack %pack missing container at position %position; packing robot awaiting recovery.',
+                'Glue temperature %glue C below minimum on CF-060; pack %pack held before release.'
+            ]
+        },
+        {
+            name: 'Pack warehouse station',
+            code: 'ST-070',
+            messages: [
+                'Outbound pack %pack scanned at warehouse entry; destination bay BAY-%bay assigned.',
+                'Palletizer placed %pack on pallet %pallet; layer pattern L%layer complete.',
+                'Pack warehouse confirmed receipt for %pack; movement transaction closed.'
+            ],
+            errors: [
+                'Warehouse entry scanner failed for %pack; manual barcode verification required.',
+                'Pallet %pallet layer L%layer unstable; palletizer stopped before next placement.'
+            ]
+        }
+    ];
+
+    const logEl = document.getElementById('movement-log');
+    const toastEl = document.getElementById('log-toast');
+    const notifyButton = document.getElementById('enable-notifications');
+    const batchEl = document.getElementById('batch-id');
+    const containerCountEl = document.getElementById('container-count');
+    const errorCountEl = document.getElementById('error-count');
+    const cycleTimeEl = document.getElementById('cycle-time');
+    const currentContainerEl = document.getElementById('current-container');
+    const clockEl = document.getElementById('line-clock');
+
+    let stationIndex = 0;
+    let cycle = 0;
+    let errors = 0;
+    let current = buildContext();
+    let notificationsEnabled = false;
+
+    function pad(value, size) {
+        return String(value).padStart(size, '0');
+    }
+
+    function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function pick(items) {
+        return items[randomInt(0, items.length - 1)];
+    }
+
+    function buildContext() {
+        cycle += 1;
+        const red = randomInt(18, 34);
+        const yellow = randomInt(12, 28);
+        const blue = randomInt(10, 24);
+        return {
+            container: `CNT-${pad(240000 + cycle, 6)}`,
+            pallet: `PAL-${pad(800 + Math.ceil(cycle / 12), 4)}`,
+            pack: `PK-${pad(1600 + Math.ceil(cycle / 6), 5)}`,
+            red,
+            yellow,
+            blue,
+            mass: (red * 1.8 + yellow * 1.7 + blue * 1.9 + randomInt(420, 470) / 10).toFixed(1),
+            vacuum: randomInt(-82, -66),
+            torque: (randomInt(18, 31) / 10).toFixed(1),
+            cap: pad(randomInt(1000, 9999), 4),
+            slot: pad(randomInt(1, 48), 2),
+            lane: randomInt(1, 4),
+            label: pad(randomInt(10, 99), 2),
+            grade: pick(['A', 'B', 'B+', 'C']),
+            position: randomInt(1, 6),
+            glue: randomInt(154, 171),
+            packWeight: (randomInt(215, 286) / 10).toFixed(1),
+            bay: pad(randomInt(1, 16), 2),
+            layer: randomInt(1, 5)
+        };
+    }
+
+    function renderMessage(template, context) {
+        return template.replace(/%([a-zA-Z]+)/g, (_, key) => context[key] ?? '');
+    }
+
+    function notifyError(text) {
+        toastEl.textContent = text;
+        toastEl.classList.add('visible');
+        window.setTimeout(() => toastEl.classList.remove('visible'), 4800);
+
+        if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('SMC SIFMES-400 movement alarm', {
+                body: text,
+                tag: 'movement-alarm'
+            });
+        }
+    }
+
+    function appendLog(entry) {
+        const row = document.createElement('div');
+        row.className = `log-row ${entry.level === 'ERROR' ? 'is-error' : ''}`;
+        row.innerHTML = `
+            <span class="log-time mono">${entry.time}</span>
+            <span class="log-level mono">${entry.level}</span>
+            <span class="log-station">${entry.code}</span>
+            <span class="log-message">${entry.message}</span>
+        `;
+        logEl.prepend(row);
+
+        while (logEl.children.length > 120) {
+            logEl.removeChild(logEl.lastChild);
+        }
+    }
+
+    function generateLog() {
+        if (stationIndex === 0) {
+            current = buildContext();
+        }
+
+        const station = stations[stationIndex];
+        const isError = Math.random() < 0.11;
+        const message = renderMessage(pick(isError ? station.errors : station.messages), current);
+        const time = new Date().toLocaleTimeString('it-IT', { hour12: false });
+
+        appendLog({
+            time,
+            level: isError ? 'ERROR' : 'INFO',
+            code: station.code,
+            message: `${station.name} - ${message}`
+        });
+
+        if (isError) {
+            errors += 1;
+            errorCountEl.textContent = errors;
+            notifyError(`${station.code} ${station.name}: ${message}`);
+        }
+
+        currentContainerEl.textContent = current.container;
+        containerCountEl.textContent = cycle;
+        batchEl.textContent = `MES-400-${pad(Math.ceil(cycle / 20), 4)}`;
+        cycleTimeEl.textContent = `${(randomInt(82, 146) / 10).toFixed(1)}s`;
+
+        stationIndex = (stationIndex + 1) % stations.length;
+    }
+
+    notifyButton.addEventListener('click', async () => {
+        if (!('Notification' in window)) {
+            notifyError('Browser notifications are not supported on this device.');
+            return;
+        }
+
+        const permission = await Notification.requestPermission();
+        notificationsEnabled = permission === 'granted';
+        notifyButton.textContent = notificationsEnabled ? 'Notifications enabled' : 'Enable notifications';
+    });
+
+    window.setInterval(() => {
+        clockEl.textContent = new Date().toLocaleTimeString('it-IT', { hour12: false });
+    }, 1000);
+
+    for (let i = 0; i < 9; i += 1) {
+        generateLog();
+    }
+
+    window.setInterval(generateLog, 1800);
+</script>
+{% endblock %}
