@@ -10,10 +10,21 @@
     <div class="navbar">
         <div class="logo">SMC <span style="opacity:.5; font-weight:600;">/ SIFMES-400</span></div>
         <div class="menu-items">
+            {% if has_permission('Gestire gli utenti') %}
             <a href="{{ url_for('user_management') }}">Management (Users)</a>
+            {% endif %}
+
+            {% if has_permission('Gestire i ruoli') %}
             <a href="{{ url_for('role_management') }}">Administration (Roles)</a>
+            {% endif %}
+
+            {% if has_permission('Conduzione della stazione') or has_permission('Eseguire Test/esercizio della macchina') %}
             <a href="{{ url_for('movement') }}">Movement</a>
+            {% endif %}
+
+            {% if has_permission('Visualizzare gli allarmi') or has_permission('Visualizzare lo stato del sistema') or has_permission('Visualizzare i consumi di energia') %}
             <a href="{{ url_for('supervision') }}">Supervision</a>
+            {% endif %}
         </div>
         <div class="user-info">
             <span>{{ session.get('display_name', session.get('username', 'Utente')) }}</span> | 

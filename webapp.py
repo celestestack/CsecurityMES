@@ -102,6 +102,7 @@ def assign_default_role_permissions():
             'Accesso alla flexpendant',
         ],
         'production manager': [
+            'Gestire gli utenti',
             'Eseguire Test/esercizio della macchina',
             'Pianificare e preparare gli ordini',
             'Gestire e lanciare gli ordini',
@@ -111,6 +112,7 @@ def assign_default_role_permissions():
             'Visualizzare gli allarmi',
         ],
         'production operator': [
+            'Gestire gli utenti',
             'Eseguire Test/esercizio della macchina',
             'Gestire e lanciare gli ordini',
             'Visualizzare i consumi di energia',
@@ -135,6 +137,7 @@ def assign_default_role_permissions():
             'Gestire il magazzino',
             'Visualizzare i consumi di energia',
             'Visualizzare lo stato del sistema',
+            'Conduzione della stazione',
         ],
         'maintenance responsible': [
             'Generare simulazione attacchi hacker/guasti',
@@ -146,11 +149,6 @@ def assign_default_role_permissions():
         ],
         'client': [
             'Creare i propri ordini',
-            'Monitorare i propri ordini',
-            'Visualizzare gli allarmi',
-            'Visualizzare lo stato del sistema',
-        ],
-        'guest': [
             'Monitorare i propri ordini',
             'Visualizzare gli allarmi',
             'Visualizzare lo stato del sistema',
@@ -220,6 +218,30 @@ def get_logged_persona():
     if persona_id:
         return Persona.query.get(persona_id)
     return None
+
+
+@app.context_processor
+def inject_user_permissions():
+    """Inserisce in tutte le template le autorizzazioni dell'utente loggato.
+    Fornisce `user_permissions` (set di nomi) e `has_permission(name)` per
+    controlli di rendering nel frontend.
+    """
+    persona = get_logged_persona()
+    perms = set()
+    if persona:
+        for ruolo in persona.ruoli:
+            if ruolo.descrizione.strip().lower() == 'guest':
+                continue
+            for a in ruolo.assegnazioni:
+                if a.permesso and a.permesso.nome_permesso:
+                    perms.add(a.permesso.nome_permesso.lower())
+
+    def has_permission(name):
+        if not name:
+            return False
+        return name.lower() in perms
+
+    return dict(user_permissions=perms, has_permission=has_permission)
 
 
 def log_activity(categoria, esito, azione, dettaglio, persona=None, username=None):
@@ -368,7 +390,7 @@ def user_management():
         return redirect_response
 
     persone = Persona.query.order_by(Persona.id_persona).all()
-    ruoli = Ruolo.query.order_by(Ruolo.descrizione).all()
+    ruoli = Ruolo.query.filter(Ruolo.descrizione != 'Guest').order_by(Ruolo.descrizione).all()
     generated_password = generate_strong_password()
     return render_template(
         'user_management.html',
@@ -463,7 +485,7 @@ def role_management():
     if redirect_response:
         return redirect_response
 
-    ruoli = Ruolo.query.order_by(Ruolo.id_ruolo).all()
+    ruoli = Ruolo.query.filter(Ruolo.descrizione != 'Guest').order_by(Ruolo.id_ruolo).all()
     return render_template(
         'role_management.html',
         roles=ruoli,

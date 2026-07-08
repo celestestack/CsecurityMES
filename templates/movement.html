@@ -10,9 +10,14 @@
                 <h2>Automated container line</h2>
                 <p>Live movement log - sessione operatore attiva</p>
             </div>
-            <div class="line-status">
-                <span class="status-dot"></span>
-                Running
+            <div class="line-actions">
+                <div class="line-status running">
+                    <span class="status-dot"></span>
+                    Running
+                </div>
+                <button type="button" class="line-action stop-action" id="stop-logs">Stop</button>
+                <button type="button" class="line-action start-action" id="start-logs">Start</button>
+                <button type="button" class="line-action reset-action" id="reset-logs">Reset logs</button>
             </div>
         </div>
 
@@ -304,10 +309,66 @@
         clockEl.textContent = new Date().toLocaleTimeString('it-IT', { hour12: false });
     }, 1000);
 
+    const stopButton = document.getElementById('stop-logs');
+    const resetButton = document.getElementById('reset-logs');
+    let logInterval = null;
+    let isRunning = true;
+
+    function startLogGenerator() {
+        if (logInterval) {
+            clearInterval(logInterval);
+        }
+        logInterval = window.setInterval(generateLog, 1800);
+        isRunning = true;
+        updateStatus('Running', 'running');
+    }
+
+    function stopLogGenerator() {
+        if (logInterval) {
+            clearInterval(logInterval);
+            logInterval = null;
+        }
+        isRunning = false;
+        updateStatus('Stopped', 'stopped');
+    }
+
+    function resetLogs() {
+        const logContainer = document.getElementById('movement-log');
+        logContainer.innerHTML = '';
+        cycle = 0;
+        errors = 0;
+        batchEl.textContent = 'MES-400-0000';
+        containerCountEl.textContent = '0';
+        errorCountEl.textContent = '0';
+        cycleTimeEl.textContent = '0.0s';
+    }
+
+    function updateStatus(label, state) {
+        const statusElement = document.querySelector('.line-status');
+        statusElement.textContent = label;
+        statusElement.className = `line-status ${state}`;
+    }
+
+    const startButton = document.getElementById('start-logs');
+
+    stopButton.addEventListener('click', () => {
+        stopLogGenerator();
+    });
+
+    startButton.addEventListener('click', () => {
+        if (!isRunning) {
+            startLogGenerator();
+        }
+    });
+
+    resetButton.addEventListener('click', () => {
+        resetLogs();
+    });
+
     for (let i = 0; i < 9; i += 1) {
         generateLog();
     }
 
-    window.setInterval(generateLog, 1800);
+    startLogGenerator();
 </script>
 {% endblock %}
