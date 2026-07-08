@@ -2,13 +2,14 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SMC SIFMES-400 - Login</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="login-body">
     <div class="login-container">
-        <h2>SMC SIFMES-400</h2>
-        <h3>Accedi al Sistema</h3>
+        <h2>SMC · SIFMES-400</h2>
+        <h3>Accedi al sistema</h3>
         {% with messages = get_flashed_messages() %}
           {% if messages %}
             <p class="error">{{ messages[0] }}</p>

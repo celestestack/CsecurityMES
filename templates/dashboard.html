@@ -2,12 +2,13 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SMC SIFMES-400</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="navbar">
-        <div class="logo">SMC</div>
+        <div class="logo">SMC <span style="opacity:.5; font-weight:600;">/ SIFMES-400</span></div>
         <div class="menu-items">
             <a href="{{ url_for('user_management') }}">Management (Users)</a>
             <a href="{{ url_for('role_management') }}">Administration (Roles)</a>
@@ -16,7 +17,7 @@
         </div>
         <div class="user-info">
             <span>{{ session.get('display_name', session.get('username', 'Utente')) }}</span> | 
-            <a href="{{ url_for('logout') }}" style="color: #ff6b6b;">Logout</a>
+            <a href="{{ url_for('logout') }}" style="color: #ff8b8b;">Logout</a>
         </div>
     </div>
 

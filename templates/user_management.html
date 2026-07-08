@@ -26,7 +26,7 @@
             <td>{{ persona.nome }}</td>
             <td>{{ persona.cognome }}</td>
             <td>{{ persona.username }}</td>
-            <td>{{ persona.ruoli | map(attribute='descrizione') | join(', ') if persona.ruoli else 'Nessuno' }}</td>
+            <td class="role-desc">{{ persona.ruoli | map(attribute='descrizione') | join(', ') if persona.ruoli else 'Nessuno' }}</td>
             <td><button class="edit-btn">✏️</button></td>
         </tr>
         {% endfor %}
