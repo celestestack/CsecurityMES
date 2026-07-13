@@ -203,9 +203,9 @@
                         <span>Ingressi di autorizzazione</span>
                     </div>
                     <div class="status-card">
-                        <h3>Permessi disponibili</h3>
-                        <strong>{{ user_permissions | length }}</strong>
-                        <span>Comandi accessibili</span>
+                        <h3>Data e ora</h3>
+                        <strong id="dashboard-clock">--:--:--</strong>
+                        <span id="dashboard-date">-- / -- / ----</span>
                     </div>
                 </div>
 
@@ -221,5 +221,23 @@
         </div>
         {% endblock %}
     </div>
+    <script>
+        function updateDashboardClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const year = now.getFullYear();
+
+            const clockEl = document.getElementById('dashboard-clock');
+            const dateEl = document.getElementById('dashboard-date');
+            if (clockEl) clockEl.textContent = `${hours}:${minutes}:${seconds}`;
+            if (dateEl) dateEl.textContent = `${day}/${month}/${year}`;
+        }
+        updateDashboardClock();
+        setInterval(updateDashboardClock, 1000);
+    </script>
 </body>
 </html>
